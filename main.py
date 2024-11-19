@@ -27,7 +27,7 @@ loader = PyPDFLoader("resource/ai_trand.pdf")
 
 # 페이지 별 문서 로드
 docs = loader.load()
-
+# CharacterTextSplitter 정의
 text_splitter = CharacterTextSplitter(
     separator="\n\n",           # 각 청크를 구분하기 위한 기준 문자열
     chunk_size=100,             # 각 청크의 최대 길이
@@ -35,22 +35,22 @@ text_splitter = CharacterTextSplitter(
     length_function=len,        # 청크의 길이를 계산하는 함수
     is_separator_regex=False,
 )
-
 splits = text_splitter.split_documents(docs)
-# print(splits)
-# recursive_text_splitter = RecursiveCharacterTextSplitter(
-#     chunk_size=100,
-#     chunk_overlap=10,
-#     length_function=len,
-#     is_separator_regex=False,
-# )
-# splits = recursive_text_splitter.split_documents(docs)
-# print(splits)
+
+# RecursiveCharacterTextSplitter 정의
+recursive_text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=100,
+    chunk_overlap=10,
+    length_function=len,
+    is_separator_regex=False,
+)
+splits2 = recursive_text_splitter.split_documents(docs)
 
 # OpenAI 임베딩 모델 초기화
 embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
 
 vectorstore = FAISS.from_documents(documents=splits, embedding=embeddings)
+# 효율적인 검색을 위해 retriever로 변환
 retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1})
 
 # 프롬프트 템플릿 정의
@@ -59,10 +59,11 @@ contextual_prompt = ChatPromptTemplate.from_messages([
     ("user", "Context: {context}\\n\\nQuestion: {question}")
 ])
 
+# 사용자 질문이 그대로 전달되는지 확인하는 passthrough
 class DebugPassThrough(RunnablePassthrough):
     def invoke(self, *args, **kwargs):
         output = super().invoke(*args, **kwargs)
-        print("Debug Output:", output)
+        # print("Debug Output:", output)
         return output
 # 문서 리스트를 텍스트로 변환하는 단계 추가
 class ContextToText(RunnablePassthrough):
@@ -74,7 +75,7 @@ class ContextToText(RunnablePassthrough):
 # RAG 체인에서 각 단계마다 DebugPassThrough 추가
 rag_chain_debug = {
     "context": retriever,                    # 컨텍스트를 가져오는 retriever
-    "question": DebugPassThrough()        # 사용자 질문이 그대로 전달되는지 확인하는 passthrough
+    "question": DebugPassThrough()        
 }  | DebugPassThrough() | ContextToText()|   contextual_prompt | model
 
 
